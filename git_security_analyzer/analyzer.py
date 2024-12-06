@@ -44,7 +44,7 @@ class GitSecurityAnalyzer:
         except:
             return ""
 
-    def _get_file_diff(self, commit: Commit, file_path: str) -> str:
+    #def _get_file_diff(self, commit: Commit, file_path: str) -> str:
         """Get the diff for a specific file in a commit."""
         '''
         if not commit.parents:
@@ -68,14 +68,87 @@ class GitSecurityAnalyzer:
             try:
                 blob = commit.tree / file_path
                 content = blob.data_stream.read().decode('utf-8', errors='ignore')
-                return f"New file: {file_path}\n\n{content}"
+                return f"[Initial commit] Added file {file_path}:\n{content}"
             except Exception as e:
                 logging.error(f"Error getting initial commit content: {e}")
                 return ""
         
         parent = commit.parents[0]
+        import pdb
+        #pdb.set_trace()
         logging.info(f"Parent commit: {parent.hexsha[:8]}")
-        
+
+        import subprocess
+        try:
+            cmd_args = ["git", "show", f"{commit.hexsha}", "--", file_path]
+            process = subprocess.Popen(
+                cmd_args,
+                cwd=self.repo_path,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+                )
+            stdout, stderr = process.communicate()
+            #input(stdout)
+            return stdout
+        except Exception as e:
+            logging.info(f"Error getting diff: {e}")
+        '''
+
+        try:
+            # 获取文件在当前commit和父commit中的状态
+            try:
+                current_blob = commit.tree / file_path
+                current_content = current_blob.data_stream.read().decode('utf-8', errors='ignore')
+            except:
+                current_content = None
+
+            try:
+                parent_blob = parent.tree / file_path
+                parent_content = parent_blob.data_stream.read().decode('utf-8', errors='ignore')
+            except:
+                parent_content = None
+
+            # 根据文件状态返回相应的diff
+            if parent_content is None and current_content is not None:
+                # 新增文件
+                logging.info(f"Diff type: Add")
+                return f"[Added] {file_path}:\n{current_content}"
+            elif parent_content is not None and current_content is None:
+                # 删除文件
+                logging.info(f"Diff type: Delete")
+                return f"[Deleted] {file_path}:\n{parent_content}"
+            elif parent_content is not None and current_content is not None:
+                # 修改文件 - 使用git的diff
+                logging.info(f"Diff type: Modify")
+                import difflib
+                diff_lines = difflib.unified_diff(
+                    current_content,
+                    parent_content,
+                    fromfile=f'a/{file_path}',
+                    tofile=f'b/{file_path}'
+                )
+                diff_content = diff_lines
+                input(diff_content)
+
+
+                diffs = parent.diff(commit, paths=[file_path])
+                if diffs:
+                    diff = diffs[0]
+                    # 检查diff.diff是bytes还是str类型
+                    diff_content = diff.diff.decode('utf-8', errors='ignore') if isinstance(diff.diff, bytes) else diff.diff
+                    input(diff.diff)
+                    return f"[Modified] {file_path}:\n{diff_content}"
+                else:
+                    return f"[No changes detected] {file_path}"
+            else:
+                return ""
+
+        except Exception as e:
+            logging.error(f"Error getting diff for {file_path}: {e}")
+            return ""
+        '''
+        '''
         # Try different diff methods
         # 1. Standard diff
         diffs = list(parent.diff(commit))
@@ -111,6 +184,7 @@ class GitSecurityAnalyzer:
                 logging.info(f"File found in commit stats: {file_path}")
                 blob = commit.tree / file_path
                 content = blob.data_stream.read().decode('utf-8', errors='ignore')
+                input(content)
                 return f"New file: {file_path}\n\n{content}"
         except Exception as e:
             logging.error(f"Error checking commit stats: {e}")
@@ -129,6 +203,7 @@ class GitSecurityAnalyzer:
         
         logging.warning(f"No diff found for {file_path} in commit {commit.hexsha[:8]}")
         return ""
+        '''
 
     def _prepare_analysis_prompt(self, commit: Commit, file_path: str) -> str:
         """Prepare the prompt for LLM analysis."""
